@@ -78,7 +78,7 @@ func NewGetCommand() *cobra.Command {
 		},
 	}
 
-	command.Flags().StringVarP(&getArgs.output, "output", "o", "", "Output format. One of: json|yaml|wide")
+	command.Flags().StringVarP(&getArgs.output, "output", "o", "", "Output format. One of: json|yaml|wide|short")
 	command.Flags().BoolVar(&noColor, "no-color", false, "Disable colorized output")
 	command.Flags().StringVar(&getArgs.status, "status", "", "Filter by status (Pending, Running, Succeeded, Skipped, Failed, Error)")
 	command.Flags().StringVar(&getArgs.nodeFieldSelectorString, "node-field-selector", "", "selector of node to display, eg: --node-field-selector phase=abc")
@@ -99,7 +99,7 @@ func printWorkflow(wf *wfv1.Workflow, getArgs getFlags) {
 	case "yaml":
 		outBytes, _ := yaml.Marshal(wf)
 		fmt.Print(string(outBytes))
-	case "wide", "":
+	case "wide", "short", "":
 		printWorkflowHelper(wf, getArgs)
 	default:
 		log.Fatalf("Unknown output format: %s", getArgs.output)
@@ -109,33 +109,37 @@ func printWorkflow(wf *wfv1.Workflow, getArgs getFlags) {
 func printWorkflowHelper(wf *wfv1.Workflow, getArgs getFlags) {
 	const fmtStr = "%-20s %v\n"
 	fmt.Printf(fmtStr, "Name:", wf.ObjectMeta.Name)
-	fmt.Printf(fmtStr, "Namespace:", wf.ObjectMeta.Namespace)
-	serviceAccount := wf.Spec.ServiceAccountName
-	if serviceAccount == "" {
-		serviceAccount = "default"
-	}
-	fmt.Printf(fmtStr, "ServiceAccount:", serviceAccount)
-	fmt.Printf(fmtStr, "Status:", printer.WorkflowStatus(wf))
-	if wf.Status.Message != "" {
-		fmt.Printf(fmtStr, "Message:", wf.Status.Message)
-	}
-	if len(wf.Status.Conditions) > 0 {
-		fmt.Printf(fmtStr, "Conditions:", "")
-		for _, condition := range wf.Status.Conditions {
-			conditionMessage := condition.Message
-			if conditionMessage == "" {
-				conditionMessage = string(condition.Status)
-			}
-			conditionPrefix := fmt.Sprintf("%s %s", workflowConditionIconMap[condition.Type], string(condition.Type))
-			fmt.Printf(fmtStr, conditionPrefix, conditionMessage)
+
+	if getArgs.output != "short" {
+		fmt.Printf(fmtStr, "Namespace:", wf.ObjectMeta.Namespace)
+		serviceAccount := wf.Spec.ServiceAccountName
+		if serviceAccount == "" {
+			serviceAccount = "default"
 		}
-	}
-	fmt.Printf(fmtStr, "Created:", humanize.Timestamp(wf.ObjectMeta.CreationTimestamp.Time))
-	if !wf.Status.StartedAt.IsZero() {
-		fmt.Printf(fmtStr, "Started:", humanize.Timestamp(wf.Status.StartedAt.Time))
-	}
-	if !wf.Status.FinishedAt.IsZero() {
-		fmt.Printf(fmtStr, "Finished:", humanize.Timestamp(wf.Status.FinishedAt.Time))
+		fmt.Printf(fmtStr, "ServiceAccount:", serviceAccount)
+		fmt.Printf(fmtStr, "Status:", printer.WorkflowStatus(wf))
+		if wf.Status.Message != "" {
+			fmt.Printf(fmtStr, "Message:", wf.Status.Message)
+		}
+		if len(wf.Status.Conditions) > 0 {
+			fmt.Printf(fmtStr, "Conditions:", "")
+			for _, condition := range wf.Status.Conditions {
+				conditionMessage := condition.Message
+				if conditionMessage == "" {
+					conditionMessage = string(condition.Status)
+				}
+				conditionPrefix := fmt.Sprintf("%s %s", workflowConditionIconMap[condition.Type], string(condition.Type))
+				fmt.Printf(fmtStr, conditionPrefix, conditionMessage)
+			}
+		}
+
+		fmt.Printf(fmtStr, "Created:", humanize.Timestamp(wf.ObjectMeta.CreationTimestamp.Time))
+		if !wf.Status.StartedAt.IsZero() {
+			fmt.Printf(fmtStr, "Started:", humanize.Timestamp(wf.Status.StartedAt.Time))
+		}
+		if !wf.Status.FinishedAt.IsZero() {
+			fmt.Printf(fmtStr, "Finished:", humanize.Timestamp(wf.Status.FinishedAt.Time))
+		}
 	}
 	if !wf.Status.StartedAt.IsZero() {
 		fmt.Printf(fmtStr, "Duration:", humanize.RelativeDuration(wf.Status.StartedAt.Time, wf.Status.FinishedAt.Time))
@@ -184,6 +188,8 @@ func printWorkflowHelper(wf *wfv1.Workflow, getArgs getFlags) {
 		// apply a dummy FgDefault format to align tab writer with the rest of the columns
 		if getArgs.output == "wide" {
 			_, _ = fmt.Fprintf(w, "%s\tTEMPLATE\tPODNAME\tDURATION\tARTIFACTS\tMESSAGE\tRESOURCESDURATION\tNODENAME\n", ansiFormat("STEP", FgDefault))
+		} else if getArgs.output == "short" {
+			_, _ = fmt.Fprintf(w, "%s\tDURATION\n", ansiFormat("STEP", FgDefault))
 		} else {
 			_, _ = fmt.Fprintf(w, "%s\tTEMPLATE\tPODNAME\tDURATION\tMESSAGE\n", ansiFormat("STEP", FgDefault))
 		}
@@ -493,6 +499,9 @@ func printNode(w *tabwriter.Writer, node wfv1.NodeStatus, nodePrefix string, get
 			args[len(args)-1] = node.HostNodeName
 		}
 		_, _ = fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", args...)
+	} else if getArgs.output == "short" {
+		shortArgs := []interface{}{nodePrefix, nodeName, duration}
+		_, _ = fmt.Fprintf(w, "%s%s\t%s\n", shortArgs...)
 	} else {
 		_, _ = fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\t%s\t%s\n", args...)
 	}
