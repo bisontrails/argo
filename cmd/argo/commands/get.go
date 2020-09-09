@@ -73,7 +73,7 @@ func NewGetCommand() *cobra.Command {
 					Namespace: namespace,
 				})
 				errors.CheckError(err)
-				printWorkflow(wf, getArgs)
+				PrintWorkflow(wf, getArgs)
 			}
 		},
 	}
@@ -89,7 +89,7 @@ func statusToNodeFieldSelector(status string) string {
 	return fmt.Sprintf("phase=%s", status)
 }
 
-func printWorkflow(wf *wfv1.Workflow, getArgs getFlags) {
+func PrintWorkflow(wf *wfv1.Workflow, getArgs getFlags) {
 	switch getArgs.output {
 	case "name":
 		fmt.Println(wf.ObjectMeta.Name)
